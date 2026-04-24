@@ -7,11 +7,15 @@
 <style>
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: 'Poppins', sans-serif;
     background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)),
                 url('https://images.unsplash.com/photo-1495474472287-4d71bcdd2085');
     background-size: cover;
     background-position: center;
+}
+
+*{
+    box-sizing: border-box;
 }
 
 /* NAVBAR */
@@ -19,7 +23,7 @@ body {
     position: absolute;
     top: 0;
     width: 100%;
-    padding: 15px 40px;
+    padding: 20px 60px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -27,13 +31,15 @@ body {
 }
 
 .navbar h2 {
-    margin: 0;
+    font-weight: 600;
+    letter-spacing: 1px;
 }
 
 .navbar a {
     color: white;
     margin-left: 20px;
     text-decoration: none;
+    font-weight: 300;
 }
 
 /* CENTER */
@@ -69,31 +75,53 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    padding: 20px;
+    padding: 30px;
+}
+
+.left h3 {
+    font-weight: 300;
+    line-height: 1.4;
 }
 
 /* RIGHT FORM */
 .right {
     width: 60%;
-    padding: 40px;
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.right h2 {
+    margin-bottom: 25px;
+    font-weight: 600;
 }
 
 /* FORM */
 input {
     width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+input:focus {
+    border-color: #8B5E3C;
+    outline: none;
 }
 
 button {
     width: 100%;
-    padding: 10px;
+    padding: 12px 15px;
+    margin-bottom: 5px;
+    margin-top: 20px;
     background: #8B5E3C;
     color: white;
-    border: none;
-    border-radius: 20px;
+    border: 1px solid transparent;
+    border-radius: 25px;
+    font-weight: 500;
     cursor: pointer;
 }
 
@@ -103,7 +131,8 @@ button:hover {
 
 .toggle {
     text-align: center;
-    margin-top: 10px;
+    margin-top: 1px;
+    font-size: 13px;
     color: #8B5E3C;
     cursor: pointer;
 }
@@ -131,7 +160,7 @@ button:hover {
 
         <!-- LEFT -->
         <div class="left">
-            <h3>"Setiap tegukan punya ceritanya sendiri</h3>
+            <h3>"Every sip has its own story"</h3>
         </div>
 
         <!-- RIGHT -->
@@ -141,13 +170,17 @@ button:hover {
             <div id="loginForm">
                 <h2>Login</h2>
 
-                <input type="text" placeholder="Email">
-                <input type="password" placeholder="Password">
+                <form method="POST" action="/login">
+                    @csrf
 
-                <button>Login</button>
+                    <input type="email" name="email" placeholder="Email" required>
+                    <input type="password" name="password" placeholder="Password" required>
+
+                    <button type="submit">Login</button>
+                </form>
 
                 <div class="toggle" onclick="showRegister()">
-                    Belum punya akun? Daftar
+                    Don't have an account? Sign up
                 </div>
             </div>
 
@@ -155,14 +188,18 @@ button:hover {
             <div id="registerForm" class="hidden">
                 <h2>Register</h2>
 
-                <input type="text" placeholder="Nama">
-                <input type="email" placeholder="Email">
-                <input type="password" placeholder="Password">
+                <form method="POST" action="/register">
+                    @csrf
 
-                <button>Daftar</button>
+                    <input type="text" name="name" placeholder="Name" required>
+                    <input type="email" name="email" placeholder="Email" required>
+                    <input type="password" name="password" placeholder="Password" required>
+
+                    <button type="submit">Sign Up</button>
+                </form>
 
                 <div class="toggle" onclick="showLogin()">
-                    Sudah punya akun? Login
+                    Already have an account? Login
                 </div>
             </div>
 
