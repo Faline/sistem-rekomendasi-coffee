@@ -152,94 +152,61 @@ button:hover {
     <p class="subtitle">We’ll match your taste with the perfect recommendation</p>
 
     <form method="POST" action="/preference">
-        @csrf
-
-        <!-- CATEGORY -->
-        <div class="section">
-            <label class="title">Category</label>
-            <div class="grid">
-
-                @foreach(['Coffee','Tea','Drinking Chocolate','Bakery','Coffee beans','Flavours','Loose Tea','Packaged Chocolate'] as $cat)
-                <label class="tile">
-                    <input type="checkbox" name="categories[]" value="{{ $cat }}">
-                    <div class="box">{{ $cat }}</div>
-                </label>
-                @endforeach
-
-            </div>
-        </div>
-
-        <!-- TYPE -->
-        <div class="section">
-            <label class="title">Type</label>
-            <div class="grid">
-
-                @foreach([
-                    'Barista Espresso','Drip coffee','Gourmet brewed coffee',
-                    'Brewed Chai Tea','Brewed Green tea','Hot chocolate',
-                    'Biscotti','Pastry','Scone','Espresso Beans'
-                ] as $type)
-                <label class="tile">
-                    <input type="checkbox" name="types[]" value="{{ $type }}">
-                    <div class="box">{{ $type }}</div>
-                </label>
-                @endforeach
-
-            </div>
-        </div>
-
-        <!-- KEYWORDS AUTOFILL -->
-        <div class="section">
-            <label class="title">Keywords (tap suggestion)</label>
-
-            <input type="text" id="keywordInput" name="keywords"
-                   placeholder="type or click suggestion...">
-
-            <div class="tags">
-                @foreach([
-                    'strong','sweet','milky','iced','chocolate',
-                    'fruity','bold','smooth','premium','spicy',
-                    'clean','refreshing','bitter','rich'
-                ] as $kw)
-                    <div class="tag" onclick="addKeyword('{{ $kw }}')">{{ $kw }}</div>
-                @endforeach
-            </div>
-        </div>
-
-        <!-- PRICE SLIDER -->
-        <div class="section">
-            <label class="title">
-                Max Budget: <span id="priceLabel">Rp 60.000</span>
+    @csrf
+    <!-- CATEGORY -->
+    <div class="section">
+        <label class="title">Category</label>
+        <div class="grid">
+            @foreach(['Coffee','Tea','Drinking Chocolate','Bakery','Coffee beans','Flavours','Loose Tea','Packaged Chocolate'] as $cat)
+            <label class="tile">
+                <input type="checkbox" name="categories[]" value="{{ $cat }}">
+                <div class="box">{{ $cat }}</div>
             </label>
-
-            <div class="slider-wrap">
-                <input type="range"
-                    id="priceSlider"
-                    name="max_price_idr"
-                    min="10000"
-                    max="800000"
-                    step="5000"
-                    value="60000"
-                    oninput="updatePrice(this.value)">
-            </div>
+            @endforeach
         </div>
-        <button type="submit">Get My Recommendation</button>
+    </div>
 
-    </form>
+    <!-- TYPE -->
+    <div class="section">
+        <label class="title">Type</label>
+        <div class="grid">
+            @foreach(['Barista Espresso','Drip coffee','Gourmet brewed coffee','Brewed Chai Tea','Brewed Green tea','Hot chocolate','Biscotti','Pastry','Scone','Espresso Beans'] as $type)
+            <label class="tile">
+                <input type="checkbox" name="types[]" value="{{ $type }}">
+                <div class="box">{{ $type }}</div>
+            </label>
+            @endforeach
+        </div>
+    </div>
 
-</div>
-</div>
+    <!-- KEYWORDS -->
+    <div class="section">
+        <label class="title">Keywords (tap suggestion)</label>
+        <input type="text" id="keywordInput" name="keywords" placeholder="type or click suggestion...">
+        <div class="tags">
+            @foreach(['strong','sweet','milky','iced','chocolate','fruity','bold','smooth','premium','spicy','clean','refreshing','bitter','rich'] as $kw)
+                <div class="tag" onclick="addKeyword('{{ $kw }}')">{{ $kw }}</div>
+            @endforeach
+        </div>
+    </div>
+
+    <!-- PRICE SLIDER -->
+    <div class="section">
+        <label class="title">Max Budget: <span id="priceLabel">Rp 60.000</span></label>
+        <div class="slider-wrap">
+            <input type="range" id="priceSlider" name="max_price_idr" min="10000" max="800000" step="5000" value="60000" oninput="updatePrice(this.value)">
+        </div>
+    </div>
+
+    <button type="submit">Get My Recommendation</button>
+</form>
 
 <script>
 function addKeyword(word){
     let input = document.getElementById("keywordInput");
-    if(input.value.trim() === ""){
-        input.value = word;
-    } else {
-        input.value += " " + word;
-    }
+    if(input.value.trim() === "") input.value = word;
+    else input.value += " " + word;
 }
-
 
 function formatRupiah(number) {
     return "Rp " + new Intl.NumberFormat("id-ID").format(number);
@@ -248,7 +215,6 @@ function formatRupiah(number) {
 function updatePrice(value) {
     document.getElementById("priceLabel").innerText = formatRupiah(value);
 }
-
 </script>
 
 </body>

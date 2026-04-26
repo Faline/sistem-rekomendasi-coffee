@@ -2,13 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Dashboard</title>
 
 <style>
+/* ======================
+   GLOBAL
+====================== */
 body {
     margin: 0;
     font-family: 'Poppins', sans-serif;
-
     /* BACKGROUND COFFEE */
     background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.7)),
                 url('https://images.unsplash.com/photo-1495474472287-4d71bcdd2085');
@@ -22,7 +25,9 @@ body {
     text-overflow: ellipsis;
 }
 
-/* NAVBAR */
+/* ======================
+   NAVBAR
+====================== */
 .navbar {
     padding: 15px 30px;
     display: flex;
@@ -31,12 +36,20 @@ body {
     color: white;
 }
 
-/* LOGO */
 .logo img {
     width: 45px;
 }
 
-/* LOGOUT */
+.link {
+    color: white;
+    text-decoration: none;
+    margin-right: 15px;
+}
+
+.link:hover {
+    opacity: 0.8;
+}
+
 .logout-btn {
     padding: 8px 15px;
     border-radius: 20px;
@@ -51,80 +64,125 @@ body {
     color: #6b4f3b;
 }
 
-/* CONTAINER */
+/* ======================
+   CONTAINER & WELCOME
+====================== */
 .container {
     padding: 20px 40px;
 }
 
-/* WELCOME */
 .welcome {
     color: white;
     margin-bottom: 25px;
 }
 
-/* SECTION CARD (GLASS EFFECT) */
+/* ======================
+   SECTION (GLASS EFFECT)
+====================== */
 .section {
     margin-bottom: 30px;
     padding: 20px;
     border-radius: 20px;
-
-    background: rgba(255,255,255,0.9);
+    background: rgba(255, 255, 255, 0.17);
     backdrop-filter: blur(10px);
 }
 
-/* TITLE */
 .section h3 {
     margin-bottom: 15px;
 }
 
-/* SCROLL */
+.section h2 {
+    color: white;
+}
+
+/* ======================
+   SCROLL & CARDS CONTAINER
+====================== */
 .scroll {
+    flex: 0 0 auto;
     display: flex;
     overflow-x: auto;
     gap: 15px;
     padding-bottom: 10px;
 }
 
-/* CARD */
+
+.cards-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+/* ======================
+   CARD
+====================== */
 .card {
-    min-width: 180px;
-    background: white;
-    border-radius: 15px;
-    padding: 12px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    flex-shrink: 0;
-    transition: 0.3s;
+    flex: 0 0 auto;
+    width: 280px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    background-color: white;
+    box-sizing: border-box;
 }
 
 .card:hover {
     transform: translateY(-5px) scale(1.03);
 }
 
-/* IMAGE */
 .card img {
     width: 100%;
-    height: 110px;
+    height: 150px;
     object-fit: cover;
     border-radius: 10px;
 }
 
-/* TEXT */
-.card h4 {
-    margin: 8px 0 3px;
-    font-size: 14px;
+/* CARD HEADER FLEX */
+.card .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+
+.card .header h2 {
+    flex: 1;
+    color: black;
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-badge {
+    background-color: #8B4513;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 .card p {
+    flex-grow: 1;
     margin: 0;
     font-size: 12px;
     color: #777;
 }
 
-/* PRICE */
 .price {
-    color: #8B5E3C;
     font-weight: bold;
     margin-top: 5px;
+    font-size: 14px;
+    color: #8B5E3C;
 }
 
 /* BUTTON */
@@ -143,7 +201,9 @@ body {
     background: #6f4a2d;
 }
 
-/* OVERLAY */
+/* ======================
+   MODAL
+====================== */
 .modal-overlay {
     display: none;
     position: fixed;
@@ -155,7 +215,6 @@ body {
     z-index: 999;
 }
 
-/* BOX (LEBIH BESAR) */
 .modal-box {
     width: 500px;
     max-width: 90%;
@@ -165,51 +224,37 @@ body {
     animation: fadeIn 0.3s ease;
 }
 
-/* IMAGE */
 .modal-image {
     height: 220px;
     background-size: cover;
     background-position: center;
 }
 
-/* CONTENT */
 .modal-content {
     padding: 25px;
 }
 
-/* TITLE */
 .modal-content h2 {
     margin: 0;
     font-size: 22px;
 }
 
-/* CATEGORY */
 .category {
     color: #8B5E3C;
-    font-size: 13px;
+    font-size: 16px;
     margin-bottom: 10px;
 }
 
-/* DESCRIPTION */
 .description {
     font-size: 14px;
     color: #555;
     line-height: 1.6;
-    margin-bottom: 15px;
-
+    margin-bottom: 20px;
+    margin-top:10px;
     max-height: 80px;
     overflow-y: auto;
 }
 
-/* PRICE */
-.price {
-    font-size: 20px;
-    font-weight: bold;
-    color: #6b4f3b;
-    margin-bottom: 20px;
-}
-
-/* QTY SECTION */
 .qty-section {
     display: flex;
     justify-content: space-between;
@@ -222,7 +267,6 @@ body {
     color: #333;
 }
 
-/* QTY BOX */
 .qty-box {
     display: flex;
     gap: 10px;
@@ -247,14 +291,12 @@ body {
     height: 35px;
 }
 
-/* TOTAL */
 .total {
     font-size: 16px;
     font-weight: bold;
     margin-bottom: 20px;
 }
 
-/* BUTTON PRIMARY */
 .btn-primary {
     width: 100%;
     padding: 12px;
@@ -270,7 +312,6 @@ body {
     background: #543d2d;
 }
 
-/* BUTTON SECONDARY */
 .btn-secondary {
     margin-top: 10px;
     width: 100%;
@@ -280,31 +321,53 @@ body {
     background: white;
     cursor: pointer;
 }
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* price tetap di atas */
+    gap: 10px;
+}
 
-/* ANIMATION */
+.modal-header h2 {
+    flex: 1; /* ambil space yang tersisa */
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.modal-price {
+    font-size: 20px;
+    font-weight: bold;
+    color: #6b4f3b;
+    white-space: nowrap;
+}
+
+/* ======================
+   ANIMATIONS
+====================== */
 @keyframes fadeIn {
     from {opacity:0; transform: scale(0.9);}
     to {opacity:1; transform: scale(1);}
 }
+
+/* ======================
+   TOAST
+====================== */
 .toast {
     position: fixed;
     top: 20px;
     left: 50%;
     transform: translate(-50%, -20px);
-
     background: #6b4f3b;
     color: white;
-
     padding: 16px 30px;
     font-size: 16px;
     font-weight: 500;
-
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-
     opacity: 0;
     transition: all 0.4s ease;
-
     z-index: 999;
 }
 
@@ -312,6 +375,8 @@ body {
     opacity: 1;
     transform: translate(-50%, 0);
 }
+
+
 
 </style>
 </head>
@@ -325,13 +390,18 @@ body {
         <p>Cangkir Kita</p>
     </div>
 
+    <div class="nav-links">
+        <a class="link" href="/dashboard">Home</a>
+        <a class="link" href="/menu">Menu</a>
+        <a class="link" href="/history">History</a>
+    </div>
+
     <form method="POST" action="/logout">
         @csrf
         <button class="logout-btn">Logout</button>
     </form>
 
 </div>
-
 <div class="container">
 
     <!-- WELCOME -->
@@ -342,16 +412,22 @@ body {
 
     <!-- RECOMMEND -->
     <div class="section">
-        <h3>Recommended For You</h3>
+        <h2 style="margin-top:10px">Recommended For You</h2>
 
         <div class="scroll" id="recommendation-list">
             <!-- dynamic -->
         </div>
     </div>
-
+    @if($hasSimilar)
+    <div class="section">
+        <h2>Because You Bought Similar Items</h2>
+        <div class="scroll" id="similar-list">
+        </div>
+    </div>
+    @endif
     <!-- POPULAR -->
     <div class="section">
-        <h3>Popular</h3>
+        <h2 style="margin-top:10px">Popular</h2>
 
         <div class="scroll" id="popular-list">
             <!-- dynamic -->
@@ -362,21 +438,17 @@ body {
 
 </body>
 <div id="purchaseModal" class="modal-overlay">
-
     <div class="modal-box">
-
-        <!-- IMAGE -->
-        <div class="modal-image" id="modalImage"></div>
-
         <!-- CONTENT -->
         <div class="modal-content">
 
-            <h2 id="modalName"></h2>
+            <div class="modal-header">
+                <h2 id="modalName"></h2>
+                <div class="modal-price" id="modalPrice"></div>
+            </div>
+
             <p id="modalCategory" class="category"></p>
-
             <p id="modalDescription" class="description"></p>
-
-            <div class="price" id="modalPrice"></div>
 
             <!-- QTY -->
             <div class="qty-section">
@@ -424,13 +496,13 @@ async function loadRecommendations() {
     data.forEach(item => {
         container.innerHTML += `
             <div class="card">
-                <img src="${item.cover_image || 'https://via.placeholder.com/150'}">
-                <h4>${item.product_name}</h4>
-                <p>${item.product_category}</p>
+                <div class="header">
+                    <h2>${item.product_name}</h2>
+                    <span class="category-badge">${item.product_category}</span>
+                </div>
+                <p>${item.product_description}</p>
                 <div class="price">${formatRupiah(item.unit_price_idr)}</div>
-                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>
-                    Buy
-                </button>
+                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>Buy</button>
             </div>
         `;
     });
@@ -459,22 +531,73 @@ async function loadPopular() {
     data.forEach(item => {
         container.innerHTML += `
             <div class="card">
-                <img src="${item.cover_image || 'https://via.placeholder.com/150'}">
-                <h4>${item.product_name}</h4>
-                <p>${item.product_category}</p>
+                <div class="header">
+                    <h2>${item.product_name}</h2>
+                    <span class="category-badge">${item.product_category}</span>
+                </div>
+                <p>${item.product_description}</p>
                 <div class="price">${formatRupiah(item.unit_price_idr)}</div>
-                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>
-                    Buy
-                </button>
+                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>Buy</button>
             </div>
         `;
     });
+}
+async function loadSimilarItems() {
+    const container = document.getElementById("similar-list");
+
+    if (!container) return;
+
+    try {
+        const response = await fetch("http://127.0.0.1:5000/similar", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({
+                user_id: {{ auth()->user()->id }}
+            })
+        });
+
+        const data = await response.json();
+
+        console.log("SIMILAR DATA:", data);
+
+        if (!Array.isArray(data) || data.length === 0) {
+            container.innerHTML = "";
+            return;
+        }
+
+        container.innerHTML = "";
+
+        data.forEach(item => {
+
+            const safeItem = JSON.stringify(item).replace(/'/g, "&apos;");
+
+            container.innerHTML += `
+            <div class="card">
+                <div class="header">
+                    <h2>${item.product_name}</h2>
+                    <span class="category-badge">${item.product_category}</span>
+                </div>
+                <p>${item.product_description}</p>
+                <div class="price">${formatRupiah(item.unit_price_idr)}</div>
+                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>Buy</button>
+            </div>
+            `;
+        });
+
+    } catch (err) {
+        console.error("Similar load error:", err);
+        container.innerHTML = "";
+    }
 }
 function formatRupiah(angka) {
     return "Rp " + Number(angka).toLocaleString("id-ID");
 }
 loadRecommendations();
 loadPopular();
+loadSimilarItems();
 
 
 </script>
@@ -531,37 +654,34 @@ function confirmPurchase() {
     fetch("/purchase", {
         method: "POST",
         headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').content
         },
         body: JSON.stringify({
-            user_id: {{ auth()->user()->id }},
             product_id: selectedProduct.product_id,
-            quantity: qty
+            quantity: qty,
+            total_price: selectedProduct.unit_price_idr * qty
         })
     })
-    .then(() => {
-        return fetch("http://127.0.0.1:5000/update-interaction", {
-            method: "POST", 
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                user_id: {{ auth()->user()->id }},
-                product_id: selectedProduct.product_id,
-                quantity: qty
-            })
-        })
-
+    .then(res => res.json().catch(() => { throw new Error("Invalid JSON from server") }))
+    .then(data => {
+        if(data.status === 'success'){
+            closeModal();
+            showToast("Pembelian berhasil!");
+            loadRecommendations(); 
+            loadPopular();
+            loadSimilarItems();
+        } else {
+            showToast("Error: " + data.message);
+        }
     })
-    .then(() => {
-        closeModal();
-        showToast("Pembelian berhasil!");
-
-        loadRecommendations();
+    .catch(err => {
+        showToast("Purchase failed: " + err.message);
     });
 }
 function closeModal() {
     document.getElementById("purchaseModal").style.display = "none";
 }
+
 </script>
 </html>

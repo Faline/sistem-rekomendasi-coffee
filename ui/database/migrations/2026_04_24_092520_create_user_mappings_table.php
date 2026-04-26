@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('user_mappings', function (Blueprint $table) {
         $table->id();
         $table->unsignedBigInteger('user_id'); // Laravel user
-        $table->unsignedBigInteger('model_user_id'); // ALS user index
+        $table->unsignedBigInteger('model_user_id')->nullable();
         $table->timestamps();
     });
     }

@@ -3,6 +3,7 @@ from flask_cors import CORS
 import pandas as pd
 import numpy as np
 import pickle
+import json
 
 import recommendation_api as rec
 
@@ -59,35 +60,63 @@ def popular():
     result = rec.get_popular(10)
     return jsonify(result.to_dict('records'))
 
-
-# ======================
-# UPDATE INTERACTION (REAL TIME FIX)
-# ======================
-@app.route('/update-interaction', methods=['POST'])
-def update_interaction():
-    global implicit_df
+@app.route("/similar", methods=["POST"])
+def similar():
+    print("HIT /similar")
+    print(request.json)
 
     data = request.json
-    user_id = data['user_id']
-    product_id = data['product_id']
-    qty = data['quantity']
+    user_id = data["user_id"]
 
-    mask = (implicit_df['user_id'] == user_id) & (implicit_df['product_id'] == product_id)
+    result = rec.recommend_content_from_history(user_id, top_k=10)
 
-    if mask.any():
-        implicit_df.loc[mask, 'purchase_count'] += qty
-    else:
-        implicit_df = pd.concat([implicit_df, pd.DataFrame([{
-            'user_id': user_id,
-            'product_id': product_id,
-            'purchase_count': qty
-        }])], ignore_index=True)
+    return jsonify(result.to_dict(orient="records"))
 
-    # 🔥 INI YANG PENTING (WAJIB UPDATE MODEL)
-    rec.refresh_data(implicit_df.copy())
 
-    return jsonify({"status": "updated"})
+@app.route('/update-interaction', methods=['POST'])
+def update_interaction():
+    try:
+        data = request.get_json(force=True)
+        user_id = int(data.get('user_id'))
+        product_id = int(data.get('product_id'))
+        qty = int(data.get('quantity', 1))
 
+        global implicit_df
+        mask = (implicit_df['user_id'] == user_id) & (implicit_df['product_id'] == product_id)
+
+        if mask.any():
+            implicit_df.loc[mask, 'purchase_count'] += qty
+        else:
+            implicit_df = pd.concat([implicit_df, pd.DataFrame([{
+                'user_id': user_id,
+                'product_id': product_id,
+                'purchase_count': qty
+            }])], ignore_index=True)
+
+        rec.refresh_data(implicit_df.copy())
+
+        return jsonify({
+            "status": "updated",
+            "user_id": user_id,
+            "product_id": product_id
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+
+@app.route('/products', methods=['GET'])
+def get_products():
+    try:
+        with open('model/df_products_final.json', 'r', encoding='utf-8') as f:
+            products = json.load(f)
+
+        return jsonify(products)
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 # ======================
 @app.route('/')

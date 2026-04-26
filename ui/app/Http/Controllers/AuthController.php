@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\UserMapping;
@@ -25,7 +25,19 @@ class AuthController extends Controller
         'password' => Hash::make($request->password),
         'has_preference' => false
     ]);
+    $mapping = UserMapping::create([
+        'user_id' => $user->id,
+        'model_user_id' => null
+    ]);
 
+    $response = Http::post('http://localhost:5000/create-user', [
+        'user_id' => $user->id
+    ]);
+
+    if ($response->successful()) {
+        $modelUserId = $response->json()['model_user_id'];
+        $mapping->update(['model_user_id' => $modelUserId]);
+    }
 
     Auth::login($user);
 
