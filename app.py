@@ -16,6 +16,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 df_products = pd.read_pickle('model/df_products_final.pkl')
 implicit_df = pd.read_pickle('model/implicit_df.pkl')
 
+implicit_df['user_id'] = implicit_df['user_id'].astype(int)
+implicit_df['product_id'] = implicit_df['product_id'].astype(int)
+
 with open('model/als_model.pkl', 'rb') as f:
     als_model = pickle.load(f)
 
@@ -25,9 +28,8 @@ with open('model/tfidf.pkl', 'rb') as f:
 content_features = np.load('model/content_features.npy')
 text_features = np.load('model/text_features.npy')
 
-
 # ======================
-# INIT RECOMMENDATION ENGINE
+# INIT SYSTEM
 # ======================
 rec.init_system(
     df_products,
@@ -38,90 +40,184 @@ rec.init_system(
     text_features
 )
 
+# ======================
+# USER OFFSET CONFIG
+# ======================
+OFFSET = 100000
+
+def normalize_user_id(user_id: int):
+    """
+    FIX UTAMA:
+    - kalau user masih kirim Laravel ID (misal 1–99999)
+      → ubah ke model ID (100001 dst)
+    """
+    if user_id < OFFSET:
+        return user_id + OFFSET
+    return user_id
+
 
 # ======================
-# RECOMMEND API
+# CREATE USER
+# ======================
+@app.route('/create-user', methods=['POST'])
+def create_user():
+    try:
+        data = request.get_json(force=True)
+        laravel_user_id = int(data.get('user_id'))
+
+        model_user_id = laravel_user_id + OFFSET
+
+        return jsonify({
+            "status": "created",
+            "model_user_id": model_user_id
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ======================
+# REFRESH MODEL
+# ======================
+@app.route('/refresh-model', methods=['POST'])
+def refresh_model():
+    try:
+        rec.init_system(
+            df_products,
+            implicit_df,
+            als_model,
+            tfidf,
+            content_features,
+            text_features
+        )
+
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+# ======================
+# RECOMMEND (FIX CORE BUG HERE)
 # ======================
 @app.route('/recommend', methods=['POST'])
 def recommend():
-    data = request.json
-    user_id = data.get("user_id")
+    data = request.get_json(force=True)
 
-    result = rec.hybrid_recommendation(user_id, top_k=5)
+    raw_user_id = int(data.get("user_id"))
+    user_id = normalize_user_id(raw_user_id)
+
+    preferences = data.get("preferences", None)
+
+    print("RAW USER ID:", raw_user_id)
+    print("MODEL USER ID:", user_id)
+    print("PREFERENCES:", preferences)
+
+    history_count = len(implicit_df[implicit_df['user_id'] == user_id])
+
+    if history_count == 0:
+        print("COLD START MODE")
+        result = rec.recommend_for_new_user(preferences, top_k=5)
+    else:
+        print("HYBRID MODE")
+        result = rec.hybrid_recommendation(
+            user_id,
+            preferences=preferences,
+            top_k=5
+        )
+
+    print("HISTORY COUNT:", history_count)
 
     return jsonify(result.to_dict(orient='records'))
 
 
 # ======================
-# POPULAR API (FIXED)
+# POPULAR
 # ======================
 @app.route('/popular')
 def popular():
     result = rec.get_popular(10)
     return jsonify(result.to_dict('records'))
 
+
+# ======================
+# SIMILAR
+# ======================
 @app.route("/similar", methods=["POST"])
 def similar():
-    print("HIT /similar")
-    print(request.json)
+    data = request.get_json(force=True)
 
-    data = request.json
-    user_id = data["user_id"]
+    user_id = normalize_user_id(int(data.get("user_id", 0)))
 
     result = rec.recommend_content_from_history(user_id, top_k=10)
+
+    if result.empty:
+        result = rec.get_popular(10)
 
     return jsonify(result.to_dict(orient="records"))
 
 
+# ======================
+# UPDATE INTERACTION
+# ======================
 @app.route('/update-interaction', methods=['POST'])
 def update_interaction():
-    try:
-        data = request.get_json(force=True)
-        user_id = int(data.get('user_id'))
-        product_id = int(data.get('product_id'))
-        qty = int(data.get('quantity', 1))
+    global implicit_df
 
-        global implicit_df
-        mask = (implicit_df['user_id'] == user_id) & (implicit_df['product_id'] == product_id)
+    data = request.get_json(force=True)
 
-        if mask.any():
-            implicit_df.loc[mask, 'purchase_count'] += qty
-        else:
-            implicit_df = pd.concat([implicit_df, pd.DataFrame([{
-                'user_id': user_id,
-                'product_id': product_id,
-                'purchase_count': qty
-            }])], ignore_index=True)
+    user_id = normalize_user_id(int(data.get('user_id')))
+    product_id = int(data.get('product_id'))
+    qty = int(data.get('quantity', 1))
 
-        rec.refresh_data(implicit_df.copy())
+    mask = (
+        (implicit_df['user_id'] == user_id) &
+        (implicit_df['product_id'] == product_id)
+    )
 
-        return jsonify({
-            "status": "updated",
-            "user_id": user_id,
-            "product_id": product_id
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-    
+    if mask.any():
+        implicit_df.loc[mask, 'purchase_count'] += qty
+    else:
+        implicit_df = pd.concat([implicit_df, pd.DataFrame([{
+            'user_id': user_id,
+            'product_id': product_id,
+            'purchase_count': qty,
+            'total_spent': 0,
+            'transaction_freq': 1
+        }])], ignore_index=True)
 
-@app.route('/products', methods=['GET'])
+    rec.refresh_data(implicit_df)
+
+    print("AFTER UPDATE SIZE:", len(implicit_df))
+    print(implicit_df[implicit_df['user_id'] == user_id])
+
+    return jsonify({"status": "updated"})
+
+
+# ======================
+# PRODUCTS
+# ======================
+@app.route('/products')
 def get_products():
     try:
         with open('model/df_products_final.json', 'r', encoding='utf-8') as f:
-            products = json.load(f)
-
-        return jsonify(products)
-
+            return jsonify(json.load(f))
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
+
 
 # ======================
 @app.route('/')
 def home():
     return "API RUNNING"
+
+
+# ======================
+@app.route('/debug')
+def debug():
+    return jsonify({
+        "total_users": len(rec.implicit_df['user_id'].unique()),
+        "total_interactions": len(rec.implicit_df)
+    })
 
 
 if __name__ == '__main__':

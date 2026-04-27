@@ -412,12 +412,33 @@ body {
 
     <!-- RECOMMEND -->
     <div class="section">
-        <h2 style="margin-top:10px">Recommended For You</h2>
+    <h2 style="margin-top:10px">Recommended For You</h2>
+    
+    <div class="scroll">
+        @foreach($recommendations as $item)
+            <div class="card">
+                <div class="header">
+                    <h2>{{ $item['product_name'] }}</h2>
+                    <span class="category-badge">{{ $item['product_category'] }}</span>
+                </div>
 
-        <div class="scroll" id="recommendation-list">
-            <!-- dynamic -->
-        </div>
+                <p>{{ $item['product_description'] ?? '-' }}</p>
+
+                <div class="price">
+                    Rp {{ number_format($item['unit_price_idr']) }}
+                </div>
+
+                <button class="btn"
+                    onclick='buyProduct(@json($item))'>
+                    Buy
+                </button>
+            </div>
+        @endforeach
+        @if(count($recommendations) === 0)
+            <p style="color:white">No recommendations yet</p>
+        @endif
     </div>
+</div>
     @if($hasSimilar)
     <div class="section">
         <h2>Because You Bought Similar Items</h2>
@@ -476,37 +497,7 @@ body {
 </div>
 <div id="toast" class="toast"></div>
 <script>
-async function loadRecommendations() {
-    const response = await fetch("http://127.0.0.1:5000/recommend", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            user_id: {{ auth()->user()->id }},
-            preferences: null
-        })
-    });
-
-    const data = await response.json();
-
-    const container = document.getElementById("recommendation-list");
-    container.innerHTML = "";
-
-    data.forEach(item => {
-        container.innerHTML += `
-            <div class="card">
-                <div class="header">
-                    <h2>${item.product_name}</h2>
-                    <span class="category-badge">${item.product_category}</span>
-                </div>
-                <p>${item.product_description}</p>
-                <div class="price">${formatRupiah(item.unit_price_idr)}</div>
-                <button class="btn" onclick='buyProduct(${JSON.stringify(item)})'>Buy</button>
-            </div>
-        `;
-    });
-}
+const MODEL_USER_ID = @json($modelUserId ?? auth()->id());
 
 function showToast(message) {
     const toast = document.getElementById("toast");
@@ -554,8 +545,9 @@ async function loadSimilarItems() {
                 "Content-Type": "application/json",
                 "Accept": "application/json"
             },
+            
             body: JSON.stringify({
-                user_id: {{ auth()->user()->id }}
+                user_id: MODEL_USER_ID
             })
         });
 
@@ -595,9 +587,10 @@ async function loadSimilarItems() {
 function formatRupiah(angka) {
     return "Rp " + Number(angka).toLocaleString("id-ID");
 }
-loadRecommendations();
+
 loadPopular();
 loadSimilarItems();
+
 
 
 </script>
@@ -664,13 +657,17 @@ function confirmPurchase() {
         })
     })
     .then(res => res.json().catch(() => { throw new Error("Invalid JSON from server") }))
-    .then(data => {
+    .then(async data => {
         if(data.status === 'success'){
             closeModal();
             showToast("Pembelian berhasil!");
-            loadRecommendations(); 
-            loadPopular();
-            loadSimilarItems();
+
+            await fetch("http://127.0.0.1:5000/refresh-model", {
+                method: "POST"
+            });
+
+            location.reload();
+        
         } else {
             showToast("Error: " + data.message);
         }

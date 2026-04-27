@@ -19,15 +19,16 @@ sparse_matrix = None
 user_ids = None
 item_ids = None
 
-user_mapping_df = None
-model_to_user = {}
-user_to_model = {}
-
-
-
+user_recommend_seen = {}
 # ======================
 # INIT SYSTEM
 # ======================
+
+def is_real_user(user_id):
+    return (
+        user_id is not None and
+        user_id in implicit_df['user_id'].values
+    )
 def init_system(df_prod, df_imp, als_model, tfidf_model, content_feat, text_feat):
     global df_products, implicit_df, model_als, tfidf
     global content_features, text_features
@@ -39,27 +40,27 @@ def init_system(df_prod, df_imp, als_model, tfidf_model, content_feat, text_feat
     tfidf = tfidf_model
     content_features = content_feat
     text_features = text_feat
-    build_user_mapping() 
+
     rebuild_system()
+def rebuild_matrix():
+    global user_item_matrix
 
-def build_user_mapping():
-    global user_mapping_df, user_to_model, model_to_user
+    # rebuild dari implicit_df terbaru
+    user_item_matrix = implicit_df.pivot_table(
+        index='user_id',
+        columns='product_id',
+        values='purchase_count',
+        fill_value=0
+    )
 
-    unique_users = implicit_df['user_id'].unique()
-
-    user_mapping_df = pd.DataFrame({
-        "user_id": unique_users,
-        "model_user_id": np.arange(len(unique_users))
-    })
-
-    user_to_model = dict(zip(user_mapping_df['user_id'], user_mapping_df['model_user_id']))
-    model_to_user = dict(zip(user_mapping_df['model_user_id'], user_mapping_df['user_id']))
+    print("MATRIX REBUILT")
+    print("SHAPE:", user_item_matrix.shape)
 # ======================
 # REBUILD MATRIX
 # ======================
 def rebuild_system():
     global user_map, item_map, sparse_matrix, user_ids, item_ids
-    
+
     user_ids = np.sort(implicit_df['user_id'].unique())
     item_ids = np.sort(implicit_df['product_id'].unique())
 
@@ -83,8 +84,7 @@ def refresh_data(new_df):
     global implicit_df
     implicit_df = new_df.copy()
     rebuild_system()
-
-
+    
 
 # ======================
 # NORMALIZE
@@ -97,26 +97,35 @@ def normalize(x):
     return (x - x.min()) / (x.max() - x.min() + 1e-9)
 
 def get_user_idx(user_id):
-    model_user_id = get_model_user_id(user_id)
-    if model_user_id is None:
-        return None
-
-    return user_map.get(model_user_id)
+    idx = user_map.get(user_id)
+    if idx is None:
+        print(f"USER NOT FOUND IN MAP: {user_id}")
+    return idx
 # ======================
 # ALS COLLAB
 # ======================
 def recommend_collaborative(user_id, top_k=5):
     user_idx = get_user_idx(user_id)
 
+   
     if user_idx is None:
         return pd.DataFrame()
 
-    rec, scores = model_als.recommend(
-        userid=user_idx,
-        user_items=sparse_matrix[user_idx],
-        N=top_k,
-        filter_already_liked_items=False
-    )
+    if user_idx >= model_als.user_factors.shape[0]:
+        print(f"ALS OUT OF BOUNDS: user_idx={user_idx}")
+        return pd.DataFrame()
+
+    try:
+        rec, scores = model_als.recommend(
+            userid=user_idx,
+            user_items=sparse_matrix[user_idx],
+            N=top_k,
+            filter_already_liked_items=True
+        )
+
+    except Exception as e:
+        print("ALS ERROR SAFE FALLBACK:", e)
+        return pd.DataFrame()
 
     items = [item_ids[i] for i in rec]
 
@@ -129,34 +138,69 @@ def recommend_collaborative(user_id, top_k=5):
 # COLD START
 # ======================
 def recommend_for_new_user(preferences: dict, top_k: int = 5):
-    if preferences is None:
-            popular = implicit_df.groupby('product_id')['purchase_count'].sum().nlargest(top_k)
-            result = df_products[df_products['product_id'].isin(popular.index)].head(top_k).copy()
-            result['similarity_score'] = 1.0
-            return result[['product_id', 'product_name', 'product_category',
-                          'product_type', 'unit_price_idr', 'similarity_score']]
 
-    """Content-Based recommendation untuk user baru"""
+    # ======================
+    # NO PREFERENCES → POPULAR
+    # ======================
+    if not preferences:
+        popular = (
+            implicit_df.groupby('product_id')['purchase_count']
+            .sum()
+            .nlargest(top_k)
+        )
+
+        result = df_products[df_products['product_id'].isin(popular.index)].head(top_k).copy()
+        result['similarity_score'] = 1.0
+
+        # 🔥 FIX: pastikan deskripsi ada
+        if 'product_description' not in result.columns:
+            result['product_description'] = "No description available"
+        else:
+            result['product_description'] = result['product_description'].fillna("No description available")
+
+        return result
+
+
+    # ======================
+    # FILTERING
+    # ======================
     mask_price = df_products['unit_price_idr'] <= preferences.get('max_price_idr', 100000)
+
     mask_cat = df_products['product_category'].isin(
         preferences.get('categories', df_products['product_category'].unique())
     )
+
     mask_type = pd.Series(True, index=df_products.index)
     if preferences.get('types'):
         mask_type = df_products['product_type'].isin(preferences['types'])
 
+    candidates = df_products[mask_price & mask_cat & mask_type].copy()
 
-    final_mask = mask_price & mask_cat & mask_type
-    candidates = df_products[final_mask].copy()
 
+    # ======================
+    # NO CANDIDATES → POPULAR FALLBACK
+    # ======================
     if len(candidates) == 0:
-        # Fallback ke popular
-        popular = implicit_df.groupby('product_id')['purchase_count'].sum().nlargest(top_k)
+        popular = (
+            implicit_df.groupby('product_id')['purchase_count']
+            .sum()
+            .nlargest(top_k)
+        )
+
         result = df_products[df_products['product_id'].isin(popular.index)].head(top_k).copy()
         result['similarity_score'] = 1.0
-        return result[['product_id', 'product_name', 'product_category',
-                       'product_type', 'unit_price_idr', 'similarity_score']]
 
+        if 'product_description' not in result.columns:
+            result['product_description'] = "No description available"
+        else:
+            result['product_description'] = result['product_description'].fillna("No description available")
+
+        return result
+
+
+    # ======================
+    # TEXT SIMILARITY
+    # ======================
     user_query = ""
     if preferences.get('categories'):
         user_query += " ".join(preferences['categories']) + " "
@@ -164,19 +208,38 @@ def recommend_for_new_user(preferences: dict, top_k: int = 5):
         user_query += " ".join(preferences.get('types', [])) + " "
     if preferences.get('keywords'):
         user_query += str(preferences['keywords'])
+
     if not user_query.strip():
-      result = candidates.sort_values('unit_price_idr').head(top_k).copy()
-      result['similarity_score'] = None
-      return result
+        result = candidates.sort_values('unit_price_idr').head(top_k).copy()
+        result['similarity_score'] = 0.0
+
+        if 'product_description' not in result.columns:
+            result['product_description'] = "No description available"
+        else:
+            result['product_description'] = result['product_description'].fillna("No description available")
+
+        return result
 
 
-    query_vec = tfidf.transform([user_query]).toarray() if 'tfidf' in globals() else np.zeros((1, content_features.shape[1]))
-    sim_scores = cosine_similarity(query_vec, text_features[candidates.index])[0] if 'text_features' in globals() else np.ones(len(candidates))
+    query_vec = tfidf.transform([user_query]).toarray()
+
+    sim_scores = cosine_similarity(query_vec, text_features[candidates.index])[0]
 
     top_indices = sim_scores.argsort()[::-1][:top_k]
-    result = candidates.iloc[top_indices][['product_id', 'product_name', 'product_category',
-                                           'product_type', 'unit_price_idr']].copy()
+
+    result = candidates.iloc[top_indices].copy()
+
     result['similarity_score'] = sim_scores[top_indices].round(4)
+
+    # ======================
+    # FINAL FIX (IMPORTANT)
+    # ======================
+    if 'product_description' not in result.columns:
+        result['product_description'] = df_products.set_index('product_id').loc[
+            result['product_id'], 'product_description'
+        ].values
+    else:
+        result['product_description'] = result['product_description'].fillna("No description available")
 
     return result
 
@@ -184,13 +247,11 @@ def recommend_for_new_user(preferences: dict, top_k: int = 5):
 # CONTENT BASED HISTORY
 # ======================
 def recommend_content_from_history(user_id, top_k=10):
-    model_user_id = get_model_user_id(user_id)
-
-    if model_user_id is None:
+    if user_id is None:
         return pd.DataFrame()
 
     user_items = implicit_df[
-        implicit_df['user_id'] == model_user_id
+        implicit_df['user_id'] == user_id
     ]['product_id']
 
     if len(user_items) == 0:
@@ -207,9 +268,7 @@ def recommend_content_from_history(user_id, top_k=10):
 
     
     full_vec = content_features[idx].mean(axis=0)
-
-    # recent history (5 terakhir)
-    recent_items = implicit_df[implicit_df['user_id'] == model_user_id]['product_id'].tail(5)
+    recent_items = implicit_df[implicit_df['user_id'] == user_id]['product_id'].tail(5)
 
     recent_idx = []
     for i in recent_items:
@@ -223,7 +282,7 @@ def recommend_content_from_history(user_id, top_k=10):
     else:
         recent_vec = content_features[recent_idx].mean(axis=0)
 
-        user_vec = 0.5 * recent_vec + 0.5 * full_vec
+        user_vec = 0.9 * recent_vec + 0.1 * full_vec
     # similarity all items
     sim = cosine_similarity([user_vec], content_features)[0]
 
@@ -232,36 +291,42 @@ def recommend_content_from_history(user_id, top_k=10):
         "similarity_score": sim
     })
     result = df_score.merge(df_products, on="product_id", how="left")
+    seen = user_recommend_seen.get(user_id, set())
 
+    # juga buang item yang sudah pernah di implicit history
+    history_items = set(implicit_df[implicit_df['user_id'] == user_id]['product_id'])
+
+    result = result[
+        ~result['product_id'].isin(seen) &
+        ~result['product_id'].isin(history_items)
+]
     return result.sort_values("similarity_score", ascending=False).head(top_k)
 
 # ======================
-# HYBRID (FIXED LOGIC)
+# HYBRID 
 # ======================
-def hybrid_recommendation(user_id, preferences=None, top_k=5):
-    model_user_id = get_model_user_id(user_id)
-    print("MODEL USER:", get_model_user_id(user_id))
-    print("HAS ALS IDX:", get_user_idx(user_id) is not None)
-    if model_user_id is None:
-        if preferences is not None:
-            return recommend_for_new_user(preferences, top_k)
-        return get_popular(top_k)
+def hybrid_recommendation(user_id=None, preferences=None, top_k=5, min_history=3):
 
-    user_history = implicit_df[implicit_df['user_id'] == model_user_id]
-    recent_items = user_history.sort_index().tail(5)['product_id'].values
+    # 🔥 FIX: SAFE CHECK
+    user_data = implicit_df[implicit_df['user_id'] == user_id]
+
+    if user_id is None or len(user_data) < min_history:
+        print("COLD START MODE")
+        return recommend_for_new_user(preferences, top_k=top_k)
+
+    print("HYBRID MODE")
 
     collab = recommend_collaborative(user_id, top_k * 2)
     content = recommend_content_from_history(user_id, top_k * 2)
 
-    if collab.empty and content.empty:
-        return get_popular(top_k)
-
     if not collab.empty:
+        collab = collab[['product_id', 'score']].copy()
         collab['norm_score'] = normalize(collab['score'])
     else:
         collab = pd.DataFrame(columns=['product_id', 'norm_score'])
 
     if not content.empty:
+        content = content[['product_id', 'similarity_score']].copy()
         content['norm_score'] = normalize(content['similarity_score'])
     else:
         content = pd.DataFrame(columns=['product_id', 'norm_score'])
@@ -274,20 +339,21 @@ def hybrid_recommendation(user_id, preferences=None, top_k=5):
         suffixes=('_collab', '_content')
     ).fillna(0)
 
-    hybrid['recent_score'] = hybrid['product_id'].apply(lambda x: 1 if x in recent_items else 0)
-
     hybrid['final_score'] = (
-        0.30 * hybrid['norm_score_collab'] +
-        0.40 * hybrid['norm_score_content'] +
-        0.30 * hybrid['recent_score']
+        0.7 * hybrid['norm_score_collab'] +
+        0.3 * hybrid['norm_score_content']
     )
-    
-    return hybrid.merge(df_products, on='product_id', how='left') \
-        .sort_values('final_score', ascending=False) \
-        .head(top_k)
 
-def get_model_user_id(user_id):
-    return user_to_model.get(user_id, None)
+    final_result = (
+        hybrid.merge(df_products, on='product_id', how='left')
+        .sort_values('final_score', ascending=False)
+        .head(top_k)
+    )
+
+   
+    user_recommend_seen[user_id] = set(final_result['product_id'].tolist())
+
+    return final_result
 # ======================
 # POPULAR
 # ======================

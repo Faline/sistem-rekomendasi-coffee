@@ -10,7 +10,7 @@ use App\Http\Controllers\PurchaseController;
 
 // Guest (belum login)
 Route::middleware('guest')->group(function () {
-    Route::get('/', [AuthController::class, 'showLogin']);
+    Route::get('/', [AuthController::class, 'showLogin'])->name('login'); 
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
 });
