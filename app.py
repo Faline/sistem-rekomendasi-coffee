@@ -82,18 +82,12 @@ def create_user():
 @app.route('/refresh-model', methods=['POST'])
 def refresh_model():
     try:
-        rec.init_system(
-            df_products,
-            implicit_df,
-            als_model,
-            tfidf,
-            content_features,
-            text_features
-        )
+        rec.rebuild_system()   # update mapping dulu
+        rec.retrain_als()     # baru retrain model
 
         return jsonify({"status": "ok"})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"error": str(e)})
 
 
 # ======================
@@ -101,6 +95,7 @@ def refresh_model():
 # ======================
 @app.route('/recommend', methods=['POST'])
 def recommend():
+    rec.check_and_retrain() 
     data = request.get_json(force=True)
 
     raw_user_id = int(data.get("user_id"))
@@ -180,18 +175,16 @@ def update_interaction():
         implicit_df = pd.concat([implicit_df, pd.DataFrame([{
             'user_id': user_id,
             'product_id': product_id,
-            'purchase_count': qty,
-            'total_spent': 0,
-            'transaction_freq': 1
+            'purchase_count': qty
         }])], ignore_index=True)
 
-    rec.refresh_data(implicit_df)
 
-    print("AFTER UPDATE SIZE:", len(implicit_df))
-    print(implicit_df[implicit_df['user_id'] == user_id])
+    rec.refresh_data(implicit_df)
+    rec.rebuild_system()   # FORCE SYNC MAP
+
+    print("USER MAP AFTER UPDATE:", user_id in rec.user_map)
 
     return jsonify({"status": "updated"})
-
 
 # ======================
 # PRODUCTS

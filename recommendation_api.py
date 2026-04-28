@@ -20,6 +20,7 @@ user_ids = None
 item_ids = None
 
 user_recommend_seen = {}
+MODEL_DIRTY = False
 # ======================
 # INIT SYSTEM
 # ======================
@@ -105,14 +106,13 @@ def get_user_idx(user_id):
 # ALS COLLAB
 # ======================
 def recommend_collaborative(user_id, top_k=5):
-    user_idx = get_user_idx(user_id)
 
-   
-    if user_idx is None:
+    if not is_valid_als_user(user_id):
         return pd.DataFrame()
 
-    if user_idx >= model_als.user_factors.shape[0]:
-        print(f"ALS OUT OF BOUNDS: user_idx={user_idx}")
+    user_idx = user_map[user_id]
+
+    if user_idx >= sparse_matrix.shape[0]:
         return pd.DataFrame()
 
     try:
@@ -122,15 +122,18 @@ def recommend_collaborative(user_id, top_k=5):
             N=top_k,
             filter_already_liked_items=True
         )
-
-    except Exception as e:
-        print("ALS ERROR SAFE FALLBACK:", e)
+    except:
         return pd.DataFrame()
 
-    items = [item_ids[i] for i in rec]
+    if len(rec) == 0:
+        return pd.DataFrame()
+
+    items = [item_ids[i] for i in rec if i < len(item_ids)]
 
     result = df_products[df_products['product_id'].isin(items)].copy()
-    result['score'] = result['product_id'].map(dict(zip(items, scores)))
+
+    if len(result) > 0:
+        result['score'] = result['product_id'].map(dict(zip(items, scores)))
 
     return result
 
@@ -307,53 +310,123 @@ def recommend_content_from_history(user_id, top_k=10):
 # ======================
 def hybrid_recommendation(user_id=None, preferences=None, top_k=5, min_history=3):
 
-    # 🔥 FIX: SAFE CHECK
     user_data = implicit_df[implicit_df['user_id'] == user_id]
-
+    print("\n=== HYBRID DEBUG ===")
+    print("User ID:", user_id)
+    print("History count:", len(user_data))
+    print("ALS valid:", is_valid_als_user(user_id))
+    # ======================
+    # COLD START
+    # ======================
     if user_id is None or len(user_data) < min_history:
-        print("COLD START MODE")
-        return recommend_for_new_user(preferences, top_k=top_k)
-
-    print("HYBRID MODE")
+        return recommend_for_new_user(preferences, top_k)
 
     collab = recommend_collaborative(user_id, top_k * 2)
     content = recommend_content_from_history(user_id, top_k * 2)
+    print("\n--- MODEL OUTPUT ---")
+    print("Collab count:", len(collab))
+    print("Content count:", len(content))
+    # fallback kalau ALS mati
+    if collab.empty and content.empty:
+        return get_popular(top_k)
 
     if not collab.empty:
         collab = collab[['product_id', 'score']].copy()
-        collab['norm_score'] = normalize(collab['score'])
+        collab['norm'] = normalize(collab['score'])
     else:
-        collab = pd.DataFrame(columns=['product_id', 'norm_score'])
+        collab = pd.DataFrame(columns=['product_id', 'norm'])
 
     if not content.empty:
         content = content[['product_id', 'similarity_score']].copy()
-        content['norm_score'] = normalize(content['similarity_score'])
+        content['norm'] = normalize(content['similarity_score'])
     else:
-        content = pd.DataFrame(columns=['product_id', 'norm_score'])
+        content = pd.DataFrame(columns=['product_id', 'norm'])
 
     hybrid = pd.merge(
-        collab[['product_id', 'norm_score']],
-        content[['product_id', 'norm_score']],
+        collab,
+        content,
         on='product_id',
         how='outer',
-        suffixes=('_collab', '_content')
+        suffixes=('_c', '_ct')
     ).fillna(0)
 
-    hybrid['final_score'] = (
-        0.7 * hybrid['norm_score_collab'] +
-        0.3 * hybrid['norm_score_content']
+    hybrid['final'] = (
+        0.7 * hybrid['norm_c'] +
+        0.3 * hybrid['norm_ct']
     )
 
-    final_result = (
-        hybrid.merge(df_products, on='product_id', how='left')
-        .sort_values('final_score', ascending=False)
-        .head(top_k)
+    result = hybrid.merge(df_products, on='product_id', how='left')
+
+    result = result.sort_values('final', ascending=False)
+
+    #ANTI DUPLICATE GLOBAL
+    seen = user_recommend_seen.get(user_id, set())
+    result = result[~result['product_id'].isin(seen)]
+
+    final = result.head(top_k)
+
+    user_recommend_seen[user_id] = set(final['product_id'].tolist())
+
+    return final
+
+
+def is_valid_als_user(user_id):
+    if model_als is None:
+        return False
+
+    if user_id not in user_map:
+        return False
+
+    idx = user_map[user_id]
+
+    return idx < model_als.user_factors.shape[0]
+
+def add_interaction(user_id, product_id, count=1):
+    global implicit_df, MODEL_DIRTY
+
+    new_row = pd.DataFrame([{
+        "user_id": user_id,
+        "product_id": product_id,
+        "purchase_count": count
+    }])
+
+    implicit_df = pd.concat([implicit_df, new_row], ignore_index=True)
+
+    MODEL_DIRTY = True  
+
+import implicit
+
+def retrain_als():
+    global model_als, MODEL_DIRTY
+
+    print("\nRETRAIN ALS STARTED...")
+
+    # 1. rebuild mapping dulu
+    rebuild_system()
+
+    # 2. pastikan matrix valid
+    matrix = sparse_matrix.tocsr()
+
+    # DEBUG WAJIB
+    print("MATRIX SHAPE:", matrix.shape)
+    print("USER MAP SIZE:", len(user_map))
+    print("ITEM MAP SIZE:", len(item_map))
+
+    # 3. train ulang
+    model = implicit.als.AlternatingLeastSquares(
+        factors=32,
+        regularization=0.5,
+        iterations=20,
+        random_state=42
     )
 
-   
-    user_recommend_seen[user_id] = set(final_result['product_id'].tolist())
+    model.fit(matrix)
 
-    return final_result
+    # 4. replace model global
+    model_als = model
+    MODEL_DIRTY = False
+
+    print("ALS RETRAIN DONE")
 # ======================
 # POPULAR
 # ======================
@@ -366,3 +439,9 @@ def get_popular(top_k=10):
         .head(top_k)
     )
     return df_products.merge(pop, on='product_id', how='inner')
+
+def check_and_retrain():
+    global MODEL_DIRTY
+
+    if MODEL_DIRTY:
+        retrain_als()
